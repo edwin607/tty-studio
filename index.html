@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TTY/STUDIO — a design tool for terminal interfaces</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0c0e; --bg2:#0e1114; --panel:#101418; --panel2:#131820;
+  --line:#1e242c; --line2:#2a323c;
+  --ink:#c7d0d9; --dim:#5d6a76; --faint:#39434e;
+  --acc:#7ef29a; --acc-dim:#2c5a3a; --amb:#f2b04d;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--mono); font-size:12px; color:var(--ink); background:var(--bg);
+  display:grid; grid-template-rows:46px 1fr 30px; grid-template-columns:172px 1fr 272px;
+  grid-template-areas:"top top top" "pal stage side" "status status status";
+  overflow:hidden; -webkit-font-smoothing:antialiased;
+}
+button,select,input,textarea{font-family:var(--mono);font-size:11px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:2px;outline:none}
+button{cursor:pointer;padding:5px 9px;letter-spacing:.04em}
+button:hover{border-color:var(--line2);color:#fff}
+select{padding:4px 6px;max-width:130px}
+input,textarea{padding:4px 6px}
+input:focus,textarea:focus,select:focus{border-color:var(--acc-dim)}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px}::-webkit-scrollbar-track{background:transparent}
+
+/* ── top bar ─────────────────────────────── */
+#topbar{grid-area:top;display:flex;align-items:center;gap:14px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--bg2);white-space:nowrap;overflow-x:auto}
+.brand{font-weight:700;letter-spacing:.12em;font-size:13px;color:#fff}
+.brand .slash{color:var(--faint)}
+.brand .ver{color:var(--dim);font-weight:400;font-size:10px;margin-left:6px;letter-spacing:.06em}
+.brand .cur{display:inline-block;width:7px;height:13px;background:var(--acc);vertical-align:-2px;margin-left:3px;animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.tb-group{display:flex;align-items:center;gap:6px}
+.tb-group+.tb-group{border-left:1px solid var(--line);padding-left:14px}
+.tb-label{color:var(--faint);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.tb-val{color:var(--dim);min-width:38px;text-align:center;font-size:10px}
+.tb.toggle.on{color:var(--acc);border-color:var(--acc-dim)}
+.exports{margin-left:auto}
+.tb.seg{color:var(--amb)}
+
+/* ── palette ─────────────────────────────── */
+#palette{grid-area:pal;border-right:1px solid var(--line);background:var(--bg2);padding:10px;overflow-y:auto}
+.pal-head{color:var(--faint);font-size:10px;letter-spacing:.12em;text-transform:uppercase;margin:2px 2px 8px}
+.pal-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pal-item{display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:3px;text-align:left}
+.pal-item:hover{border-color:var(--acc-dim);background:var(--panel2)}
+.pal-item .pi{font-size:15px;line-height:1;color:var(--acc)}
+.pal-item .pl{font-size:10px;color:var(--ink);letter-spacing:.05em}
+.pal-note{margin-top:12px;color:var(--faint);font-size:10px;line-height:1.7;padding:0 2px}
+
+/* ── stage ───────────────────────────────── */
+#stage{grid-area:stage;position:relative;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:40px;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 38%, rgba(126,242,154,.045), transparent 65%),
+    var(--bg);}
+#stage.dotted::before{content:"";position:fixed;inset:46px 272px 30px 172px;pointer-events:none;
+  background-image:radial-gradient(circle, #1b2128 1px, transparent 1px);background-size:22px 22px;opacity:.7}
+#window{position:relative;border:1px solid var(--line2);border-radius:8px;overflow:hidden;background:#000;box-shadow:0 30px 80px -20px rgba(0,0,0,.8),0 0 0 1px rgba(0,0,0,.6)}
+#chrome{height:30px;display:flex;align-items:center;gap:8px;padding:0 12px;background:linear-gradient(#171b20,#12151a);border-bottom:1px solid var(--line)}
+#chrome .dots{display:flex;gap:6px}
+#chrome .dot{width:9px;height:9px;border-radius:50%;background:#2b333d}
+#chrome .dot:nth-child(1){background:#ff5f57}#chrome .dot:nth-child(2){background:#febc2e}#chrome .dot:nth-child(3){background:#28c840}
+#chrome-title{color:var(--dim);font-size:10px;letter-spacing:.06em;margin-left:6px}
+#prewrap{position:relative;padding:22px}
+#screen{margin:0;user-select:none}
+#screen span{white-space:pre}
+#overlay{position:absolute;pointer-events:none}
+.part{position:absolute;pointer-events:auto;cursor:grab;border:1px dashed transparent;border-radius:1px}
+.part:hover{border-color:rgba(126,242,154,.35)}
+.part.sel{border-color:var(--acc);cursor:grab}
+.part.dragging{cursor:grabbing}
+.handle{position:absolute;right:-6px;bottom:-6px;width:11px;height:11px;background:var(--acc);border:1px solid #000;cursor:nwse-resize;border-radius:1px;pointer-events:auto}
+#stage.nochrome #chrome{display:none}
+#stage.nochrome #window{border-radius:4px}
+
+/* ── side ────────────────────────────────── */
+#side{grid-area:side;border-left:1px solid var(--line);background:var(--bg2);display:flex;flex-direction:column;min-height:0}
+.side-tabs{display:flex;border-bottom:1px solid var(--line)}
+.side-tabs button{flex:1;border:none;border-bottom:2px solid transparent;background:transparent;padding:9px 0;color:var(--dim);letter-spacing:.14em;font-size:10px}
+.side-tabs button.on{color:var(--acc);border-bottom-color:var(--acc)}
+#props,#layers{overflow-y:auto;padding:12px;flex:1;min-height:0}
+#layers.hidden,#props.hidden{display:none}
+.empty{color:var(--faint);font-size:11px;line-height:1.8;padding:6px 2px}
+.f{margin-bottom:10px}
+.f label{display:block;color:var(--dim);font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+.f input[type=text],.f input[type=number],.f select,.f textarea{width:100%}
+.f textarea{min-height:64px;resize:vertical;line-height:1.5}
+.f-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:12px}
+.f-row .f{margin-bottom:0}
+.swatches{display:flex;flex-wrap:wrap;gap:5px}
+.sw{width:18px;height:18px;border-radius:3px;border:1px solid var(--line2);cursor:pointer;position:relative}
+.sw.on{box-shadow:0 0 0 2px var(--acc)}
+.sw.none{background:repeating-linear-gradient(45deg,#14181d 0 3px,#1e242c 3px 6px)}
+.sw .swname{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--dim)}
+.hexrow{display:flex;gap:6px;margin-top:6px;align-items:center}
+.hexrow input{flex:1}
+.insp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.insp-type{color:#fff;font-weight:700;letter-spacing:.1em;font-size:11px}
+.insp-id{color:var(--faint);font-size:10px}
+.insp-actions{display:flex;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.insp-actions button{flex:1}
+.btn-danger:hover{color:#ff7b72;border-color:#5a2c2c}
+.layer{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1px solid var(--line);border-radius:3px;margin-bottom:6px;background:var(--panel);cursor:pointer}
+.layer:hover{border-color:var(--line2)}
+.layer.sel{border-color:var(--acc-dim);background:var(--panel2)}
+.layer .li{color:var(--acc);width:16px;text-align:center}
+.layer .ln{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.layer button{padding:2px 5px;font-size:10px;background:transparent;border-color:transparent}
+.layer button:hover{border-color:var(--line2)}
+
+/* ── status bar ──────────────────────────── */
+#statusbar{grid-area:status;display:flex;align-items:center;gap:16px;padding:0 12px;border-top:1px solid var(--line);background:var(--bg2);color:var(--dim);font-size:10px;letter-spacing:.05em}
+#statusbar .spacer{flex:1}
+#statusbar .hint{color:var(--faint)}
+#statusbar b{color:var(--acc);font-weight:400}
+
+/* ── size popover ────────────────────────── */
+#size-pop{position:fixed;top:52px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line2);border-radius:4px;padding:12px;display:flex;gap:8px;align-items:flex-end;z-index:50;box-shadow:0 16px 40px rgba(0,0,0,.6)}
+#size-pop.hidden{display:none}
+#size-pop .f{margin:0}
+#size-pop input{width:64px}
+#toast{position:fixed;bottom:44px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--acc-dim);color:var(--acc);padding:8px 16px;border-radius:3px;font-size:11px;letter-spacing:.05em;z-index:60;opacity:0;transition:opacity .25s;pointer-events:none}
+#toast.show{opacity:1}
+.part,.handle{touch-action:none}
+#btn-side,#btn-side-close{display:none}
+
+/* ── mobile layout ───────────────────────── */
+@media (max-width: 820px){
+  body{grid-template-rows:44px 1fr auto 28px;grid-template-columns:1fr;
+    grid-template-areas:"top" "stage" "pal" "status"}
+  #topbar{gap:10px;padding:0 8px}
+  .tb-group+.tb-group{border-left:none;padding-left:0}
+  .tb-label{display:none}
+  #btn-side{display:inline-block;color:var(--acc)}
+  #palette{border-right:none;border-top:1px solid var(--line);padding:6px 8px}
+  .pal-head{display:none}
+  .pal-grid{display:flex;overflow-x:auto;gap:6px;padding-bottom:2px}
+  .pal-item{min-width:82px;flex-direction:row;align-items:center;gap:7px;padding:7px 9px}
+  .pal-note{display:none}
+  #side{position:fixed;top:44px;right:0;bottom:0;width:min(310px,88vw);z-index:40;
+    border-left:1px solid var(--line2);box-shadow:-20px 0 50px rgba(0,0,0,.5);
+    transform:translateX(102%);transition:transform .18s ease-out}
+  body.show-side #side{transform:none}
+  #btn-side-close{display:inline-block;flex:0 0 auto;border:none;background:transparent;color:var(--dim)}
+  #stage{padding:12px;align-items:flex-start;justify-content:flex-start}
+  #stage.dotted::before{inset:0}
+  #prewrap{padding:12px}
+  #statusbar .hint{display:none}
+}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">TTY<span class="slash">/</span>STUDIO<span class="cur"></span><span class="ver">v0.1</span></div>
+  <div class="tb-group">
+    <span class="tb-label">template</span>
+    <select id="sel-template">
+      <option value="">— load —</option>
+      <option value="monitor">system monitor</option>
+      <option value="wizard">installer wizard</option>
+      <option value="log">log tail</option>
+    </select>
+    <span class="tb-label">screen</span>
+    <select id="sel-size">
+      <option value="80x24">80 × 24</option>
+      <option value="80x30">80 × 30</option>
+      <option value="100x30">100 × 30</option>
+      <option value="120x36">120 × 36</option>
+      <option value="custom">custom…</option>
+    </select>
+    <span class="tb-label">theme</span>
+    <select id="sel-theme"></select>
+  </div>
+  <div class="tb-group">
+    <button id="btn-zoom-out" class="tb" title="zoom out">−</button>
+    <span id="zoom-label" class="tb-val">100%</span>
+    <button id="btn-zoom-in" class="tb" title="zoom in">+</button>
+    <button id="btn-zoom-fit" class="tb">fit</button>
+    <button id="btn-grid" class="tb toggle on" title="dot grid">grid</button>
+    <button id="btn-chrome" class="tb toggle on" title="window chrome">chrome</button>
+  </div>
+  <div class="tb-group exports">
+    <button id="btn-new" class="tb" title="clear canvas">new</button>
+    <button id="btn-undo" class="tb" title="undo (ctrl+z)">↶</button>
+    <button id="btn-redo" class="tb" title="redo (ctrl+shift+z)">↷</button>
+    <button id="exp-ansi" class="tb" title="download ANSI text">.ansi</button>
+    <button id="exp-py" class="tb" title="download faithful Python (ANSI) script">.py</button>
+    <button id="exp-textual" class="tb seg" title="download semantic Textual app">textual.py</button>
+    <button id="exp-png" class="tb" title="download PNG screenshot">.png</button>
+    <button id="exp-json" class="tb" title="download project file">.json</button>
+    <button id="btn-import" class="tb" title="import project file">import</button>
+    <button id="btn-side" class="tb">props</button>
+  </div>
+</header>
+
+<aside id="palette">
+  <div class="pal-head">Components</div>
+  <div class="pal-grid" id="pal-grid"></div>
+  <div class="pal-note">Click to add to canvas.<br>Drag to move · drag <span style="color:var(--acc)">■</span> to resize.<br>Props edit on the right.</div>
+</aside>
+
+<main id="stage" class="dotted">
+  <div id="window">
+    <div id="chrome">
+      <span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>
+      <span id="chrome-title">edwin@tty — ~/screen</span>
+    </div>
+    <div id="prewrap">
+      <pre id="screen"></pre>
+      <div id="overlay"></div>
+    </div>
+  </div>
+</main>
+
+<aside id="side">
+  <div class="side-tabs">
+    <button id="tab-props" class="on">PROPS</button>
+    <button id="tab-layers">LAYERS</button>
+    <button id="btn-side-close">✕</button>
+  </div>
+  <div id="props"></div>
+  <div id="layers" class="hidden"></div>
+</aside>
+
+<footer id="statusbar">
+  <span id="st-pos">—</span>
+  <span id="st-count"></span>
+  <span class="spacer"></span>
+  <span class="hint">click palette to add · drag to move · <b>■</b> resize · ⌫ delete · ⌃Z undo</span>
+</footer>
+
+<div id="size-pop" class="hidden">
+  <div class="f"><label>cols</label><input type="number" id="pop-cols" value="100" min="20" max="240"></div>
+  <div class="f"><label>rows</label><input type="number" id="pop-rows" value="30" min="8" max="80"></div>
+  <button id="pop-apply">apply</button>
+</div>
+<input type="file" id="file-input" accept=".json,application/json" hidden>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ═══════════════════════════ 1. THEMES & COMPONENT DEFS ═══════════════════════════ */
+const MONO = '"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+const THEMES = {
+  'ansi-dark': {label:'ANSI Dark', bg:'#0d1117', fg:'#c9d1d9', palette:{
+    black:'#000000', gray:'#8b949e', red:'#ff7b72', green:'#7ee787', yellow:'#f2cc60',
+    blue:'#79c0ff', magenta:'#d2a8ff', cyan:'#76e3ea', white:'#ffffff'}},
+  'phosphor': {label:'Phosphor', bg:'#051007', fg:'#62f78d', palette:{
+    black:'#000000', gray:'#2e5d3c', red:'#ff5f56', green:'#62f78d', yellow:'#f2cc60',
+    blue:'#79c0ff', magenta:'#d2a8ff', cyan:'#5ff2c8', white:'#eafff0'}},
+  'amber': {label:'Amber CRT', bg:'#120b02', fg:'#ffb224', palette:{
+    black:'#000000', gray:'#7a5b23', red:'#ff5340', green:'#c8ff70', yellow:'#ffb224',
+    blue:'#8fb8ff', magenta:'#e79bff', cyan:'#7fe7d2', white:'#fff3d6'}},
+  'paper': {label:'Paper Light', bg:'#f3f0e8', fg:'#23272e', palette:{
+    black:'#111111', gray:'#8a8f98', red:'#c92a2a', green:'#2b8a3e', yellow:'#b07d10',
+    blue:'#1c64c8', magenta:'#9c36b5', cyan:'#0c8599', white:'#ffffff'}},
+  'mono': {label:'Monochrome', bg:'#000000', fg:'#e8e8e8', palette:{
+    black:'#000000', gray:'#6f6f6f', red:'#cfcfcf', green:'#e8e8e8', yellow:'#bfbfbf',
+    blue:'#cfcfcf', magenta:'#bfbfbf', cyan:'#e8e8e8', white:'#ffffff'}},
+};
+const SWATCH_ORDER = ['default','none','gray','red','green','yellow','blue','magenta','cyan','white','black'];
+const BORDERS = {
+  single:{tl:'┌',tr:'┐',bl:'└',br:'┘',h:'─',v:'│'},
+  double:{tl:'╔',tr:'╗',bl:'╚',br:'╝',h:'═',v:'║'},
+  round: {tl:'╭',tr:'╮',bl:'╰',br:'╯',h:'─',v:'│'},
+  heavy: {tl:'┏',tr:'┓',bl:'┗',br:'┛',h:'━',v:'┃'},
+};
+const DEFS = {
+  panel:{label:'Panel', icon:'▣', def:{w:26,h:9}, min:{w:4,h:3},
+    props:{title:'Panel', titleAlign:'left', border:'single', borderColor:'green', fg:'default', bg:'none', pad:1, body:''},
+    fields:[
+      {k:'title',t:'text',label:'title'},
+      {k:'titleAlign',t:'select',label:'title align',options:['left','center','right']},
+      {k:'border',t:'select',label:'border',options:['single','double','round','heavy']},
+      {k:'borderColor',t:'color',label:'border color'},
+      {k:'bg',t:'color',label:'fill'},
+      {k:'body',t:'textarea',label:'body text'},
+      {k:'pad',t:'number',label:'padding',min:0,max:3},
+    ]},
+  text:{label:'Text', icon:'¶', def:{w:32,h:3}, min:{w:2,h:1},
+    props:{content:'Sample text', align:'left', fg:'default', bold:false, dim:false, reverse:false},
+    fields:[
+      {k:'content',t:'textarea',label:'content'},
+      {k:'align',t:'select',label:'align',options:['left','center','right']},
+      {k:'fg',t:'color',label:'color'},
+      {k:'bold',t:'bool',label:'bold'},
+      {k:'dim',t:'bool',label:'dim'},
+      {k:'reverse',t:'bool',label:'reverse video'},
+    ]},
+  menu:{label:'Menu', icon:'☰', def:{w:24,h:5}, min:{w:6,h:1},
+    props:{items:'Overview\nMetrics\nLogs\nSettings', selected:0, pointer:'❯', fg:'default', accent:'green'},
+    fields:[
+      {k:'items',t:'textarea',label:'items (one per line)'},
+      {k:'selected',t:'number',label:'selected index',min:0},
+      {k:'pointer',t:'text',label:'pointer char'},
+      {k:'fg',t:'color',label:'color'},
+      {k:'accent',t:'color',label:'highlight'},
+    ]},
+  tabs:{label:'Tabs', icon:'▤', def:{w:40,h:2}, min:{w:6,h:1},
+    props:{items:'General,Network,Security', active:0, underline:true, fg:'default', accent:'green'},
+    fields:[
+      {k:'items',t:'text',label:'tabs (comma sep)'},
+      {k:'active',t:'number',label:'active index',min:0},
+      {k:'underline',t:'bool',label:'underline row'},
+      {k:'fg',t:'color',label:'color'},
+      {k:'accent',t:'color',label:'active color'},
+    ]},
+  table:{label:'Table', icon:'▦', def:{w:44,h:8}, min:{w:6,h:3},
+    props:{columns:'PID,NAME,CPU%,MEM', rows:'4821,zsh,0.2,0.6\n913,node server.js,11.8,3.2\n1204,postgres,3.1,9.4\n77,sshd,0.0,0.1', headerRule:true, fg:'default', accent:'green'},
+    fields:[
+      {k:'columns',t:'text',label:'columns (comma sep)'},
+      {k:'rows',t:'textarea',label:'rows (one per line)'},
+      {k:'headerRule',t:'bool',label:'header rule'},
+      {k:'fg',t:'color',label:'color'},
+      {k:'accent',t:'color',label:'header color'},
+    ]},
+  progress:{label:'Progress', icon:'▰', def:{w:30,h:2}, min:{w:6,h:1},
+    props:{label:'CPU', pct:64, showLabel:true, showPct:true, fg:'green', track:'gray'},
+    fields:[
+      {k:'label',t:'text',label:'label'},
+      {k:'pct',t:'number',label:'percent',min:0,max:100},
+      {k:'showLabel',t:'bool',label:'show label row'},
+      {k:'showPct',t:'bool',label:'show percent'},
+      {k:'fg',t:'color',label:'fill color'},
+      {k:'track',t:'color',label:'track color'},
+    ]},
+  spark:{label:'Sparkline', icon:'▁', def:{w:26,h:1}, min:{w:2,h:1},
+    props:{values:'3,5,2,8,6,9,12,7,10,14,11,8,9,13', fg:'cyan'},
+    fields:[
+      {k:'values',t:'text',label:'values (comma sep)'},
+      {k:'fg',t:'color',label:'color'},
+    ]},
+  input:{label:'Input', icon:'›', def:{w:30,h:2}, min:{w:6,h:1},
+    props:{label:'Project name', value:'tty-studio', prompt:'❯', focused:true, fg:'default', accent:'green'},
+    fields:[
+      {k:'label',t:'text',label:'label'},
+      {k:'value',t:'text',label:'value'},
+      {k:'prompt',t:'text',label:'prompt char'},
+      {k:'focused',t:'bool',label:'focused (cursor)'},
+      {k:'fg',t:'color',label:'color'},
+      {k:'accent',t:'color',label:'prompt color'},
+    ]},
+  button:{label:'Button', icon:'▢', def:{w:14,h:1}, min:{w:4,h:1},
+    props:{label:'CONFIRM', style:'filled', accent:'green'},
+    fields:[
+      {k:'label',t:'text',label:'label'},
+      {k:'style',t:'select',label:'style',options:['filled','outline']},
+      {k:'accent',t:'color',label:'color'},
+    ]},
+  rule:{label:'Rule', icon:'─', def:{w:40,h:1}, min:{w:2,h:1},
+    props:{title:'', char:'─', fg:'gray'},
+    fields:[
+      {k:'title',t:'text',label:'title (optional)'},
+      {k:'char',t:'select',label:'char',options:['─','━','═','┈','·']},
+      {k:'fg',t:'color',label:'color'},
+    ]},
+  statusbar:{label:'Status bar', icon:'▔', def:{w:80,h:1}, min:{w:4,h:1},
+    props:{left:' NORMAL ', center:'', right:' utf-8 · 80×24 ', bg:'green', fg:'black'},
+    fields:[
+      {k:'left',t:'text',label:'left'},
+      {k:'center',t:'text',label:'center'},
+      {k:'right',t:'text',label:'right'},
+      {k:'bg',t:'color',label:'background'},
+      {k:'fg',t:'color',label:'color'},
+    ]},
+};
+
+/* ═══════════════════════════ 2. STATE ═══════════════════════════ */
+let uidc = 1;
+const uid = () => 'w' + (uidc++);
+const state = {
+  cols: 100, rows: 30, theme: 'ansi-dark',
+  components: [], selectedId: null,
+  fs: 14, showGrid: true, showChrome: true, name: 'untitled',
+};
+const hist = {stack: [], idx: -1};
+function snapshot(){ return JSON.stringify({cols:state.cols, rows:state.rows, theme:state.theme, components:state.components}); }
+function pushHistory(){
+  hist.stack = hist.stack.slice(0, hist.idx + 1);
+  hist.stack.push(snapshot());
+  if (hist.stack.length > 80) hist.stack.shift();
+  hist.idx = hist.stack.length - 1;
+  try{ localStorage.setItem('tty-studio-v1', snapshot()); }catch(e){}
+}
+function restore(snap){
+  const d = JSON.parse(snap);
+  state.cols = d.cols; state.rows = d.rows; state.theme = d.theme;
+  state.components = d.components; state.selectedId = null;
+  uidc = Math.max(1, ...state.components.map(c => parseInt(c.id.slice(1)) || 0)) + 1;
+  render();
+}
+function undo(){ if (hist.idx > 0){ hist.idx--; restore(hist.stack[hist.idx]); } }
+function redo(){ if (hist.idx < hist.stack.length - 1){ hist.idx++; restore(hist.stack[hist.idx]); } }
+function sel(){ return state.components.find(c => c.id === state.selectedId) || null; }
+function th(){ return THEMES[state.theme]; }
+function resolveColor(v, fallback){
+  if (v === undefined || v === null || v === 'default') return fallback !== undefined ? fallback : th().fg;
+  if (v === 'none') return null;
+  return th().palette[v] || (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v) ? v : (fallback !== undefined ? fallback : th().fg));
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function newComp(type, x, y){
+  const d = DEFS[type];
+  const c = {id: uid(), type, x: x ?? (2 + (state.components.length * 2) % 20), y: y ?? (2 + (state.components.length * 1) % 10),
+    w: type === 'statusbar' ? state.cols : d.def.w, h: d.def.h, props: JSON.parse(JSON.stringify(d.props))};
+  c.x = Math.max(0, Math.min(c.x, state.cols - c.w));
+  c.y = Math.max(0, Math.min(c.y, state.rows - c.h));
+  return c;
+}
+/* ═══════════════════════════ 3. CELL BUFFER & PAINTERS ═══════════════════════════ */
+function newBuf(cols, rows){
+  return Array.from({length: rows}, () => Array.from({length: cols}, () => ({ch:' ', fg:null, bg:null, bold:false, dim:false})));
+}
+function painter(buf, comp){
+  const {x: ox, y: oy, w, h} = comp;
+  const cols = state.cols, rows = state.rows;
+  return {
+    put(cx, cy, ch, st){
+      if (cx < 0 || cy < 0 || cx >= w || cy >= h) return;
+      const gx = ox + cx, gy = oy + cy;
+      if (gx < 0 || gy < 0 || gx >= cols || gy >= rows) return;
+      const cell = buf[gy][gx];
+      cell.ch = ch;
+      if (st){ if ('fg' in st) cell.fg = st.fg; if ('bg' in st) cell.bg = st.bg; if ('bold' in st) cell.bold = st.bold; if ('dim' in st) cell.dim = st.dim; }
+    },
+    text(cx, cy, s, st){
+      for (let i = 0; i < s.length; i++) this.put(cx + i, cy, s[i], st);
+    },
+    fill(cx, cy, cw, chh, ch, st){
+      for (let y = cy; y < cy + chh; y++) for (let x = cx; x < cx + cw; x++) this.put(x, y, ch, st);
+    }
+  };
+}
+function wrapLines(s, width){
+  const out = [];
+  for (const raw of String(s).split('\n')){
+    if (raw.length <= width){ out.push(raw); continue; }
+    let line = raw;
+    while (line.length > width){
+      let cut = line.lastIndexOf(' ', width);
+      if (cut <= 0) cut = width;
+      out.push(line.slice(0, cut)); line = line.slice(cut).replace(/^ /, '');
+    }
+    out.push(line);
+  }
+  return out;
+}
+const PAINTERS = {
+  panel(P, c){
+    const p = c.props, T = th();
+    const bc = resolveColor(p.borderColor), fc = resolveColor(p.fg), bg = resolveColor(p.bg, null);
+    const B = BORDERS[p.border] || BORDERS.single;
+    if (bg) P.fill(0, 0, c.w, c.h, ' ', {bg});
+    if (c.w >= 2 && c.h >= 2){
+      P.put(0, 0, B.tl, {fg: bc}); P.put(c.w - 1, 0, B.tr, {fg: bc});
+      P.put(0, c.h - 1, B.bl, {fg: bc}); P.put(c.w - 1, c.h - 1, B.br, {fg: bc});
+      for (let x = 1; x < c.w - 1; x++){ P.put(x, 0, B.h, {fg: bc}); P.put(x, c.h - 1, B.h, {fg: bc}); }
+      for (let y = 1; y < c.h - 1; y++){ P.put(0, y, B.v, {fg: bc}); P.put(c.w - 1, y, B.v, {fg: bc}); }
+    }
+    const title = String(p.title || '').trim();
+    if (title && c.w > 6){
+      const t = ' ' + title.slice(0, c.w - 4) + ' ';
+      let tx = p.titleAlign === 'center' ? Math.round((c.w - t.length) / 2)
+             : p.titleAlign === 'right' ? c.w - t.length - 2 : 2;
+      tx = Math.max(1, Math.min(tx, c.w - t.length - 1));
+      P.text(tx, 0, t, {fg: bc, bold: true});
+    }
+    if (p.body){
+      const pad = Math.min(3, Math.max(0, p.pad | 0));
+      const iw = c.w - 2 - pad * 2, ih = c.h - 2 - pad;
+      const lines = wrapLines(p.body, Math.max(1, iw));
+      for (let i = 0; i < Math.min(ih, lines.length); i++)
+        P.text(1 + pad, 1 + pad + i, lines[i], {fg: fc});
+    }
+  },
+  text(P, c){
+    const p = c.props, T = th();
+    let fc = resolveColor(p.fg), bg = null;
+    if (p.reverse){ bg = fc; fc = T.bg; }
+    const lines = wrapLines(p.content, Math.max(1, c.w));
+    for (let i = 0; i < Math.min(c.h, lines.length); i++){
+      const ln = lines[i];
+      let x = p.align === 'center' ? Math.round((c.w - ln.length) / 2)
+            : p.align === 'right' ? c.w - ln.length : 0;
+      P.text(Math.max(0, x), i, ln, {fg: fc, bg, bold: p.bold, dim: p.dim});
+    }
+  },
+  menu(P, c){
+    const p = c.props;
+    const fc = resolveColor(p.fg), ac = resolveColor(p.accent);
+    const items = String(p.items).split('\n');
+    for (let i = 0; i < Math.min(c.h, items.length); i++){
+      const it = items[i].slice(0, c.w - 2);
+      if (i === p.selected){ P.text(0, i, (p.pointer || '❯') + ' ' + it, {fg: ac, bold: true}); }
+      else P.text(0, i, '  ' + it, {fg: fc});
+    }
+  },
+  tabs(P, c){
+    const p = c.props, T = th();
+    const fc = resolveColor(p.fg), ac = resolveColor(p.accent);
+    const items = String(p.items).split(',').map(s => s.trim()).filter(Boolean);
+    let x = 0, spans = [];
+    for (let i = 0; i < items.length; i++){
+      const seg = ' ' + items[i] + ' ';
+      if (x + seg.length > c.w) break;
+      if (i === p.active){ P.text(x, 0, seg, {fg: T.bg, bg: ac, bold: true}); }
+      else P.text(x, 0, seg, {fg: fc, dim: true});
+      spans.push([x, x + seg.length]); x += seg.length + 1;
+    }
+    if (p.underline && c.h >= 2){
+      for (let i = 0; i < c.w; i++) P.put(i, 1, '─', {fg: resolveColor('gray')});
+      const sp = spans[p.active];
+      if (sp) for (let i = sp[0]; i < sp[1]; i++) P.put(i, 1, '━', {fg: ac});
+    }
+  },
+  table(P, c){
+    const p = c.props;
+    const fc = resolveColor(p.fg), ac = resolveColor(p.accent), gc = resolveColor('gray');
+    const cols = String(p.columns).split(',').map(s => s.trim());
+    const data = String(p.rows).split('\n').filter(r => r.trim()).map(r => r.split(',').map(s => s.trim()));
+    const n = cols.length; if (!n) return;
+    const gap = 2;
+    let nat = cols.map((cl, i) => Math.max(3, cl.length, ...data.map(r => (r[i] || '').length)));
+    const avail = c.w - gap * (n - 1);
+    let tot = nat.reduce((a, b) => a + b, 0);
+    if (tot > avail){ nat = nat.map(wd => Math.max(3, Math.floor(wd * avail / tot))); }
+    let xs = [0]; for (let i = 1; i < n; i++) xs.push(xs[i - 1] + nat[i - 1] + gap);
+    for (let i = 0; i < n; i++) P.text(xs[i], 0, cols[i].slice(0, nat[i]).padEnd(nat[i]), {fg: ac, bold: true});
+    let ry = 1;
+    if (p.headerRule && c.h >= 3){
+      for (let i = 0; i < n; i++) for (let x = 0; x < nat[i]; x++) P.put(xs[i] + x, 1, '─', {fg: gc});
+      ry = 2;
+    }
+    for (const r of data){
+      if (ry >= c.h) break;
+      for (let i = 0; i < n; i++) P.text(xs[i], ry, (r[i] || '').slice(0, nat[i]).padEnd(nat[i]), {fg: fc});
+      ry++;
+    }
+  },
+  progress(P, c){
+    const p = c.props;
+    const fc = resolveColor(p.fg), tc = resolveColor(p.track), dc = resolveColor(p.fg === 'default' ? 'default' : 'default');
+    let barRow = 0;
+    if (p.showLabel && c.h >= 2){
+      if (p.label) P.text(0, 0, String(p.label).slice(0, c.w), {fg: resolveColor('default'), dim: true});
+      if (p.showPct) P.text(Math.max(0, c.w - 4), 0, String(Math.round(p.pct)).padStart(3) + '%', {fg: resolveColor('default')});
+      barRow = 1;
+    }
+    const filled = Math.round(Math.max(0, Math.min(100, p.pct)) / 100 * c.w);
+    for (let i = 0; i < c.w; i++) P.put(i, barRow, i < filled ? '█' : '░', {fg: i < filled ? fc : tc});
+  },
+  spark(P, c){
+    const p = c.props;
+    const blocks = '▁▂▃▄▅▆▇█';
+    const vals = String(p.values).split(',').map(s => parseFloat(s)).filter(v => !isNaN(v));
+    if (!vals.length) return;
+    const mx = Math.max(...vals, 0.0001), fc = resolveColor(p.fg);
+    for (let i = 0; i < Math.min(c.w, vals.length); i++)
+      P.put(i, 0, blocks[Math.round(vals[i] / mx * 7)], {fg: fc});
+  },
+  input(P, c){
+    const p = c.props;
+    const fc = resolveColor(p.fg), ac = resolveColor(p.accent);
+    let row = 0;
+    if (p.label && c.h >= 2){ P.text(0, 0, String(p.label).slice(0, c.w), {fg: resolveColor('default'), dim: true}); row = 1; }
+    const line = (p.prompt || '❯') + ' ' + String(p.value || '');
+    P.text(0, row, line.slice(0, c.w), {fg: fc});
+    if (p.prompt) P.text(0, row, String(p.prompt), {fg: ac, bold: true});
+    if (p.focused && line.length + 1 <= c.w) P.put(line.length + 1, row, '▏', {fg: ac});
+  },
+  button(P, c){
+    const p = c.props, T = th();
+    const ac = resolveColor(p.accent);
+    const s = '[ ' + String(p.label).toUpperCase().slice(0, Math.max(1, c.w - 4)) + ' ]';
+    const x = Math.max(0, Math.round((c.w - s.length) / 2));
+    if (p.style === 'filled') P.text(x, 0, s, {fg: T.bg, bg: ac, bold: true});
+    else P.text(x, 0, s, {fg: ac});
+  },
+  rule(P, c){
+    const p = c.props;
+    const fc = resolveColor(p.fg);
+    const ch = p.char || '─';
+    for (let i = 0; i < c.w; i++) P.put(i, 0, ch, {fg: fc});
+    const t = String(p.title || '').trim();
+    if (t && c.w > t.length + 4){
+      const s = ' ' + t + ' ';
+      P.text(Math.round((c.w - s.length) / 2), 0, s, {fg: fc});
+    }
+  },
+  statusbar(P, c){
+    const p = c.props;
+    const bg = resolveColor(p.bg), fc = resolveColor(p.fg);
+    for (let i = 0; i < c.w; i++) P.put(i, 0, ' ', {bg});
+    if (p.left) P.text(0, 0, String(p.left).slice(0, c.w), {fg: fc, bg, bold: true});
+    if (p.center){ const s = String(p.center).slice(0, c.w); P.text(Math.max(0, Math.round((c.w - s.length) / 2)), 0, s, {fg: fc, bg}); }
+    if (p.right){ const s = String(p.right).slice(0, c.w); P.text(c.w - s.length, 0, s, {fg: fc, bg}); }
+  },
+};
+function paintAll(){
+  const buf = newBuf(state.cols, state.rows);
+  for (const c of state.components){ const fn = PAINTERS[c.type]; if (fn) fn(painter(buf, c), c); }
+  return buf;
+}
+/* ═══════════════════════════ 4. SCREEN RENDER (DOM) ═══════════════════════════ */
+let cellW = 8, cellH = 17;
+const mctx = document.createElement('canvas').getContext('2d');
+function measure(){ mctx.font = `${state.fs}px ${MONO}`; cellW = mctx.measureText('0').width; cellH = Math.round(state.fs * 1.25); }
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function esc(s){ return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function wrapSpan(s, key){
+  const [fg, bg, bold, dim] = key.split('|');
+  let st = '';
+  if (fg && fg !== 'null') st += 'color:' + fg + ';';
+  if (bg && bg !== 'null') st += 'background:' + bg + ';';
+  if (bold === 'true') st += 'font-weight:700;';
+  if (dim === 'true') st += 'opacity:.55;';
+  return st ? `<span style="${st}">${esc(s)}</span>` : esc(s);
+}
+function renderScreen(){
+  measure();
+  const buf = paintAll();
+  const pre = document.getElementById('screen');
+  pre.style.font = `${state.fs}px ${MONO}`;
+  pre.style.lineHeight = cellH + 'px';
+  pre.style.color = th().fg;
+  pre.style.background = th().bg;
+  pre.style.width = (state.cols * cellW) + 'px';
+  const rowsHtml = [];
+  for (let y = 0; y < buf.length; y++){
+    let html = '', run = null, rs = '';
+    const flush = () => { if (run !== null){ html += wrapSpan(rs, run); run = null; rs = ''; } };
+    for (let x = 0; x < buf[y].length; x++){
+      const cl = buf[y][x];
+      const key = cl.fg + '|' + cl.bg + '|' + cl.bold + '|' + cl.dim;
+      if (run === null){ run = key; rs = cl.ch; }
+      else if (key === run){ rs += cl.ch; }
+      else { flush(); run = key; rs = cl.ch; }
+    }
+    flush();
+    rowsHtml.push(html || ' ');
+  }
+  pre.innerHTML = rowsHtml.join('\n');
+}
+
+/* ═══════════════════════════ 5. OVERLAY / SELECTION / DRAG ═══════════════════════════ */
+let parts = {};
+function cellFromEvent(e){
+  const r = document.getElementById('screen').getBoundingClientRect();
+  return [Math.floor((e.clientX - r.left) / cellW), Math.floor((e.clientY - r.top) / cellH)];
+}
+function renderOverlay(){
+  const ov = document.getElementById('overlay');
+  const pre = document.getElementById('screen');
+  ov.innerHTML = ''; parts = {};
+  ov.style.left = pre.offsetLeft + 'px'; ov.style.top = pre.offsetTop + 'px';
+  ov.style.width = pre.offsetWidth + 'px'; ov.style.height = pre.offsetHeight + 'px';
+  for (const c of state.components){
+    const el = document.createElement('div');
+    el.className = 'part' + (c.id === state.selectedId ? ' sel' : '');
+    if (c.id === state.selectedId){
+      const h = document.createElement('div'); h.className = 'handle';
+      el.appendChild(h); bindResize(h, c);
+    }
+    bindDrag(el, c);
+    ov.appendChild(el); parts[c.id] = el;
+  }
+  layoutOverlay();
+}
+function layoutOverlay(){
+  for (const c of state.components){
+    const el = parts[c.id]; if (!el) continue;
+    el.style.left = (c.x * cellW) + 'px'; el.style.top = (c.y * cellH) + 'px';
+    el.style.width = (c.w * cellW) + 'px'; el.style.height = (c.h * cellH) + 'px';
+  }
+}
+function bindDrag(el, c){
+  el.addEventListener('pointerdown', e => {
+    if (e.target.classList.contains('handle')) return;
+    e.preventDefault();
+    select(c.id, true);
+    const start = cellFromEvent(e), ox = c.x, oy = c.y;
+    el.classList.add('dragging');
+    el.setPointerCapture(e.pointerId);
+    const mv = ev => {
+      const cur = cellFromEvent(ev);
+      c.x = clamp(ox + cur[0] - start[0], 0, state.cols - c.w);
+      c.y = clamp(oy + cur[1] - start[1], 0, state.rows - c.h);
+      renderScreen(); layoutOverlay();
+    };
+    const up = () => { el.removeEventListener('pointermove', mv); el.classList.remove('dragging'); pushHistory(); render(); };
+    el.addEventListener('pointermove', mv);
+    el.addEventListener('pointerup', up, {once: true});
+  });
+}
+function bindResize(handle, c){
+  handle.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    const start = cellFromEvent(e), ow = c.w, oh = c.h;
+    const mn = DEFS[c.type].min;
+    handle.setPointerCapture(e.pointerId);
+    const mv = ev => {
+      const cur = cellFromEvent(ev);
+      c.w = clamp(ow + cur[0] - start[0], mn.w, state.cols - c.x);
+      c.h = clamp(oh + cur[1] - start[1], mn.h, state.rows - c.y);
+      renderScreen(); layoutOverlay();
+    };
+    const up = () => { handle.removeEventListener('pointermove', mv); pushHistory(); render(); };
+    handle.addEventListener('pointermove', mv);
+    handle.addEventListener('pointerup', up, {once: true});
+  });
+}
+function select(id, soft){
+  state.selectedId = id;
+  if (id && window.innerWidth <= 820) document.body.classList.add('show-side');
+  if (!soft) render(); else {
+    for (const k in parts) parts[k].classList.toggle('sel', k === id);
+    renderProps(); renderLayers();
+  }
+}
+
+/* ═══════════════════════════ 6. PALETTE / INSPECTOR / LAYERS ═══════════════════════════ */
+function el(tag, cls, txt){ const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; }
+function renderPalette(){
+  const g = document.getElementById('pal-grid'); g.innerHTML = '';
+  for (const type in DEFS){
+    const d = DEFS[type];
+    const b = el('button', 'pal-item');
+    b.appendChild(el('span', 'pi', d.icon));
+    b.appendChild(el('span', 'pl', d.label));
+    b.onclick = () => {
+      const c = newComp(type);
+      state.components.push(c); state.selectedId = c.id;
+      if (window.innerWidth <= 820) document.body.classList.add('show-side');
+      pushHistory(); render();
+      toast('added ' + d.label.toLowerCase());
+    };
+    g.appendChild(b);
+  }
+}
+function fieldEl(f, c){
+  const wrap = el('div', 'f');
+  const lab = el('label', null, f.label); wrap.appendChild(lab);
+  const commit = () => pushHistory();
+  const live = () => { renderScreen(); layoutOverlay(); };
+  let inp;
+  if (f.t === 'text' || f.t === 'number'){
+    inp = el('input'); inp.type = f.t; inp.value = c.props[f.k];
+    if (f.min !== undefined) inp.min = f.min;
+    if (f.max !== undefined) inp.max = f.max;
+    inp.addEventListener('input', () => { c.props[f.k] = f.t === 'number' ? parseFloat(inp.value) || 0 : inp.value; live(); });
+    inp.addEventListener('change', commit);
+  } else if (f.t === 'textarea'){
+    inp = el('textarea'); inp.value = c.props[f.k];
+    inp.addEventListener('input', () => { c.props[f.k] = inp.value; live(); });
+    inp.addEventListener('change', commit);
+  } else if (f.t === 'select'){
+    inp = el('select');
+    for (const o of f.options){ const op = el('option', null, o); op.value = o; inp.appendChild(op); }
+    inp.value = c.props[f.k];
+    inp.addEventListener('change', () => { c.props[f.k] = inp.value; live(); commit(); });
+  } else if (f.t === 'bool'){
+    inp = el('input'); inp.type = 'checkbox'; inp.checked = !!c.props[f.k];
+    inp.style.width = 'auto';
+    inp.addEventListener('change', () => { c.props[f.k] = inp.checked; live(); commit(); });
+  } else if (f.t === 'color'){
+    const box = el('div', 'swatches');
+    for (const name of SWATCH_ORDER){
+      const sw = el('div', 'sw' + (String(c.props[f.k]) === name ? ' on' : ''));
+      if (name === 'default' || name === 'none'){
+        sw.classList.add('none'); sw.appendChild(el('span', 'swname', name === 'default' ? 'D' : '∅'));
+        sw.title = name;
+      } else { sw.style.background = th().palette[name]; sw.title = name; }
+      sw.onclick = () => { c.props[f.k] = name; pushHistory(); render(); };
+      box.appendChild(sw);
+    }
+    wrap.appendChild(box);
+    const hexrow = el('div', 'hexrow');
+    const hex = el('input'); hex.type = 'text'; hex.placeholder = '#hex';
+    if (/^#/.test(String(c.props[f.k]))) hex.value = c.props[f.k];
+    hex.addEventListener('change', () => {
+      if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(hex.value.trim())){ c.props[f.k] = hex.value.trim(); pushHistory(); render(); }
+    });
+    hexrow.appendChild(hex); wrap.appendChild(hexrow);
+    return wrap;
+  }
+  wrap.appendChild(inp);
+  return wrap;
+}
+function renderProps(){
+  const root = document.getElementById('props'); root.innerHTML = '';
+  const c = sel();
+  if (!c){ root.appendChild(el('div', 'empty', 'Nothing selected.\nClick a component on the canvas, or add one from the palette.')); return; }
+  const d = DEFS[c.type];
+  const head = el('div', 'insp-head');
+  head.appendChild(el('span', 'insp-type', d.label.toUpperCase()));
+  head.appendChild(el('span', 'insp-id', c.id));
+  root.appendChild(head);
+  const geo = el('div', 'f-row');
+  for (const [k, label, mn, mx] of [['x', 'x', 0, state.cols - c.w], ['y', 'y', 0, state.rows - c.h], ['w', 'w', d.min.w, state.cols - c.x], ['h', 'h', d.min.h, state.rows - c.y]]){
+    const f = el('div', 'f'); f.appendChild(el('label', null, label));
+    const inp = el('input'); inp.type = 'number'; inp.value = c[k]; inp.min = mn; inp.max = mx;
+    inp.addEventListener('change', () => { c[k] = clamp(parseInt(inp.value) || mn, mn, mx); pushHistory(); render(); });
+    f.appendChild(inp); geo.appendChild(f);
+  }
+  root.appendChild(geo);
+  for (const f of d.fields) root.appendChild(fieldEl(f, c));
+  const acts = el('div', 'insp-actions');
+  const dup = el('button', null, '⧉ duplicate');
+  dup.onclick = () => {
+    const n = JSON.parse(JSON.stringify(c)); n.id = uid();
+    n.x = clamp(n.x + 1, 0, state.cols - n.w); n.y = clamp(n.y + 1, 0, state.rows - n.h);
+    state.components.push(n); state.selectedId = n.id; pushHistory(); render();
+  };
+  const del = el('button', 'btn-danger', '✕ delete');
+  del.onclick = () => { state.components = state.components.filter(x => x.id !== c.id); state.selectedId = null; pushHistory(); render(); };
+  acts.appendChild(dup); acts.appendChild(del);
+  root.appendChild(acts);
+}
+function renderLayers(){
+  const root = document.getElementById('layers'); root.innerHTML = '';
+  if (!state.components.length){ root.appendChild(el('div', 'empty', 'Empty canvas.')); return; }
+  const list = [...state.components].reverse();
+  for (const c of list){
+    const d = DEFS[c.type];
+    const row = el('div', 'layer' + (c.id === state.selectedId ? ' sel' : ''));
+    row.appendChild(el('span', 'li', d.icon));
+    const label = c.props.title || c.props.label || (c.props.items || '').split(/[\n,]/)[0] || d.label;
+    row.appendChild(el('span', 'ln', d.label + ' · ' + String(label).slice(0, 18)));
+    const up = el('button', null, '↑'); up.title = 'bring forward';
+    up.onclick = e => { e.stopPropagation(); const i = state.components.indexOf(c); if (i < state.components.length - 1){ [state.components[i], state.components[i + 1]] = [state.components[i + 1], state.components[i]]; pushHistory(); render(); } };
+    const dn = el('button', null, '↓'); dn.title = 'send backward';
+    dn.onclick = e => { e.stopPropagation(); const i = state.components.indexOf(c); if (i > 0){ [state.components[i], state.components[i - 1]] = [state.components[i - 1], state.components[i]]; pushHistory(); render(); } };
+    row.appendChild(up); row.appendChild(dn);
+    row.onclick = () => select(c.id);
+    root.appendChild(row);
+  }
+}
+
+/* ═══════════════════════════ 7. TEMPLATES ═══════════════════════════ */
+function mk(type, x, y, w, h, props){ const c = newComp(type, x, y); c.w = w; c.h = h; Object.assign(c.props, props || {}); return c; }
+const TEMPLATES = {
+  monitor: {cols: 100, rows: 30, comps: () => [
+    mk('statusbar', 0, 0, 100, 1, {left: ' TTYSCOPE ', right: ' 14:32:07 · up 3d 4h ', bg: 'blue', fg: 'white'}),
+    mk('panel', 2, 2, 46, 7, {title: 'CPU', borderColor: 'green'}),
+    mk('progress', 4, 4, 42, 2, {label: 'core 0', pct: 38, fg: 'green'}),
+    mk('progress', 4, 6, 42, 2, {label: 'core 1', pct: 72, fg: 'yellow'}),
+    mk('panel', 52, 2, 46, 7, {title: 'Memory', borderColor: 'magenta'}),
+    mk('progress', 54, 4, 40, 2, {label: 'ram', pct: 61, fg: 'magenta'}),
+    mk('progress', 54, 6, 40, 2, {label: 'swap', pct: 12, fg: 'cyan'}),
+    mk('panel', 2, 10, 46, 5, {title: 'Throughput', borderColor: 'cyan'}),
+    mk('spark', 4, 12, 42, 1, {values: '3,5,2,8,6,9,12,7,10,14,11,8,9,13,10,15,12,9,11,14,16,13,10,12,9,11,13,15,12,10,8,9,11,13,16,14,11,9,12,14,10,8', fg: 'cyan'}),
+    mk('text', 4, 13, 42, 1, {content: '14.2k req/s · p99 82ms', dim: true}),
+    mk('panel', 2, 16, 46, 11, {title: 'Events', borderColor: 'gray', body: '12:01:44  worker-3   heartbeat ok\n12:01:41  cache      warm · 98.2% hit\n12:01:36  queue      drained 412 jobs\n12:01:29  deploy     v0.9.14 → staging\n12:01:12  worker-1   restarted (oom)\n12:00:58  cache      flush partial'}),
+    mk('panel', 52, 10, 46, 17, {title: 'Processes', borderColor: 'yellow'}),
+    mk('table', 54, 12, 42, 13, {columns: 'PID,NAME,CPU%,MEM', accent: 'yellow', rows: '913,node server.js,11.8,3.2\n1204,postgres,3.1,9.4\n4821,zsh,0.2,0.6\n77,sshd,0.0,0.1\n3311,redis,0.4,1.8\n6020,worker-3,6.2,2.4\n6021,worker-1,5.9,2.2\n88,init,0.0,0.0'}),
+    mk('statusbar', 0, 29, 100, 1, {left: ' q quit ', center: 'f6 sort · f9 kill', right: ' load 0.42 · 100×30 ', bg: 'green', fg: 'black'}),
+  ]},
+  wizard: {cols: 80, rows: 24, comps: () => [
+    mk('text', 2, 1, 76, 1, {content: 'TTYFORGE — FIRST RUN SETUP', align: 'center', bold: true, fg: 'cyan'}),
+    mk('rule', 2, 2, 76, 1, {}),
+    mk('panel', 18, 4, 44, 15, {title: 'step 2 of 4 — memory', border: 'double', borderColor: 'cyan'}),
+    mk('text', 21, 6, 38, 2, {content: 'Where should the agent keep its working memory between sessions?'}),
+    mk('menu', 21, 9, 38, 3, {items: '~/memory\n./.memory  (this project)\ns3://bucket/memory', selected: 1, accent: 'cyan'}),
+    mk('input', 21, 13, 38, 2, {label: 'namespace', value: 'default', accent: 'cyan'}),
+    mk('button', 21, 16, 12, 1, {label: 'back', style: 'outline', accent: 'gray'}),
+    mk('button', 47, 16, 12, 1, {label: 'next', style: 'filled', accent: 'cyan'}),
+    mk('statusbar', 0, 23, 80, 1, {left: ' tab · next field ', right: ' enter confirm · esc cancel ', bg: 'gray', fg: 'black'}),
+  ]},
+  log: {cols: 100, rows: 30, comps: () => [
+    mk('tabs', 2, 1, 62, 2, {items: 'Follow,Errors,Warnings,All', active: 0, accent: 'green'}),
+    mk('panel', 2, 3, 96, 24, {title: 'app.log — tailing', borderColor: 'gray'}),
+    mk('text', 4, 5, 92, 20, {dim: true, content: '12:04:01.882  INFO   gateway   ← POST /v1/chat 200 (412ms)\n12:04:01.504  INFO   router    model=qwen3 · tier=fast\n12:04:01.090  DEBUG  cache     hit 9f3e…c1 (ttl 58s)\n12:03:59.771  WARN   worker-1  mem 87% — shedding low-pri\n12:03:58.113  INFO   queue     depth 42 → 38\n12:03:55.902  ERROR  stripe    webhook retried (2/5): timeout\n12:03:55.410  INFO   gateway   ← GET /health 200 (2ms)\n12:03:54.980  INFO   deploy    canary 10% → 25%\n12:03:52.611  DEBUG  auth      token refresh ok (edwin)\n12:03:50.221  INFO   gateway   ← POST /v1/embed 200 (88ms)'}),
+    mk('statusbar', 0, 28, 100, 1, {left: ' ● LIVE ', center: '1,204 lines · 48/s', right: ' / filter · s pause ', bg: 'red', fg: 'white'}),
+  ]},
+};
+function applyTemplate(key){
+  const t = TEMPLATES[key]; if (!t) return;
+  state.cols = t.cols; state.rows = t.rows;
+  state.components = t.comps(); state.selectedId = null;
+  pushHistory(); render();
+  toast('template: ' + key);
+}
+/* ═══════════════════════════ 8. MASTER RENDER ═══════════════════════════ */
+function render(){
+  renderScreen(); renderOverlay(); renderProps(); renderLayers();
+  document.getElementById('st-count').textContent = `${state.cols}×${state.rows} · ${state.components.length} parts`;
+  document.getElementById('zoom-label').textContent = Math.round(state.fs / 14 * 100) + '%';
+  document.getElementById('stage').classList.toggle('dotted', state.showGrid);
+  document.getElementById('stage').classList.toggle('nochrome', !state.showChrome);
+  document.getElementById('btn-grid').classList.toggle('on', state.showGrid);
+  document.getElementById('btn-chrome').classList.toggle('on', state.showChrome);
+  document.getElementById('chrome-title').textContent = 'edwin@tty — ~/' + state.name;
+  syncSelects();
+}
+function syncSelects(){
+  document.getElementById('sel-theme').value = state.theme;
+  const key = state.cols + 'x' + state.rows;
+  const sel = document.getElementById('sel-size');
+  sel.value = [...sel.options].some(o => o.value === key) ? key : 'custom';
+}
+
+/* ═══════════════════════════ 9. EXPORT — ANSI / PYTHON ═══════════════════════════ */
+function hexRgb(hex){
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function bufToAnsi(buf){
+  const T = th();
+  let out = '', cur = '';
+  for (let y = 0; y < buf.length; y++){
+    let end = buf[y].length - 1;
+    while (end >= 0 && buf[y][end].ch === ' ' && !buf[y][end].bg) end--;
+    for (let x = 0; x <= end; x++){
+      const cl = buf[y][x];
+      const key = (cl.fg || '') + '|' + (cl.bg || '') + '|' + cl.bold + '|' + cl.dim;
+      if (key !== cur){
+        out += '\x1b[0m';
+        if (cl.bold) out += '\x1b[1m';
+        if (cl.dim) out += '\x1b[2m';
+        const fgc = cl.fg || T.fg, bgc = cl.bg || T.bg;
+        const [r1, g1, b1] = hexRgb(fgc); out += `\x1b[38;2;${r1};${g1};${b1}m`;
+        const [r2, g2, b2] = hexRgb(bgc); out += `\x1b[48;2;${r2};${g2};${b2}m`;
+        cur = key;
+      }
+      out += cl.ch;
+    }
+    if (cur){ out += '\x1b[0m'; cur = ''; }
+    if (y < buf.length - 1) out += '\n';
+  }
+  return out;
+}
+function exportANSI(){ return bufToAnsi(paintAll()); }
+function exportPython(){
+  const ansi = bufToAnsi(paintAll());
+  return `#!/usr/bin/env python3
+# ${state.name} — generated by TTY/STUDIO v0.1
+# Faithful truecolor ANSI render of the screen design. No dependencies.
+# Run: python3 ${state.name}.py
+import sys
+
+SCREEN = ${JSON.stringify(ansi)}
+
+sys.stdout.write(SCREEN + "\\x1b[0m\\n")
+`;
+}
+
+/* ═══════════════════════════ 10. EXPORT — TEXTUAL (semantic app) ═══════════════════════════ */
+const B2T = {single: 'solid', double: 'double', round: 'round', heavy: 'heavy'};
+const V2T = {green: 'success', red: 'error', yellow: 'warning', blue: 'primary'};
+function exportTextual(){
+  const T = th();
+  const css = [`Screen { background: ${T.bg}; color: ${T.fg}; }`];
+  const compose = [], mount = [];
+  const used = new Set(['Static']);
+  const add = (id, x, y, w, h, extra) => css.push(`#${id} { position: absolute; offset: ${x} ${y}; width: ${w}; height: ${h}; ${extra || ''}}`);
+  const q = s => JSON.stringify(String(s));
+  for (const c of state.components){
+    const p = c.props, id = c.id;
+    switch (c.type){
+      case 'panel': {
+        const bg = p.bg && p.bg !== 'none' ? `background: ${resolveColor(p.bg, null)};` : 'background: transparent;';
+        add(id, c.x, c.y, c.w, c.h, `border: ${B2T[p.border] || 'solid'} ${resolveColor(p.borderColor)}; color: ${resolveColor(p.fg)}; ${bg} padding: 0 ${clamp(p.pad | 0, 0, 3)}; border-title-align: ${p.titleAlign || 'left'};`);
+        compose.push(`        ${id} = Static(${q(p.body || '')}, id=${q(id)})`);
+        if (String(p.title || '').trim()) compose.push(`        ${id}.border_title = ${q(p.title)}`);
+        compose.push(`        yield ${id}`);
+        break;
+      }
+      case 'text': {
+        let fc = resolveColor(p.fg), bgx = 'transparent';
+        if (p.reverse){ bgx = fc; fc = T.bg; }
+        add(id, c.x, c.y, c.w, c.h, `color: ${fc}; background: ${bgx}; text-align: ${p.align}; ${p.bold ? 'text-style: bold;' : ''}`);
+        compose.push(`        yield Static(${q(p.content)}, id=${q(id)})`);
+        break;
+      }
+      case 'menu': {
+        used.add('OptionList');
+        const items = String(p.items).split('\n');
+        add(id, c.x, c.y, c.w, c.h, `color: ${resolveColor(p.fg)}; background: transparent; border: none;`);
+        compose.push(`        yield OptionList(${items.map(q).join(', ')}, id=${q(id)})`);
+        mount.push(`        self.query_one(${q('#' + id)}, OptionList).highlighted = ${Math.max(0, p.selected | 0)}`);
+        break;
+      }
+      case 'tabs': {
+        used.add('Tabs'); used.add('Tab');
+        const items = String(p.items).split(',').map(s => s.trim()).filter(Boolean);
+        add(id, c.x, c.y, c.w, Math.max(2, c.h), 'background: transparent;');
+        compose.push(`        yield Tabs(${items.map((t2, i) => `Tab(${q(t2)}, id=${q('tab' + i + '_' + id)})`).join(', ')}, id=${q(id)})`);
+        mount.push(`        self.query_one(${q('#' + id)}, Tabs).active = ${q('tab' + Math.max(0, p.active | 0) + '_' + id)}`);
+        break;
+      }
+      case 'table': {
+        used.add('DataTable');
+        const cols = String(p.columns).split(',').map(s => s.trim());
+        const rows = String(p.rows).split('\n').filter(r => r.trim()).map(r => r.split(',').map(s => s.trim()));
+        add(id, c.x, c.y, c.w, c.h, 'background: transparent; border: none;');
+        compose.push(`        yield DataTable(zebra_stripes=True, id=${q(id)})`);
+        mount.push(`        _t = self.query_one(${q('#' + id)}, DataTable)`);
+        mount.push(`        _t.add_columns(${cols.map(q).join(', ')})`);
+        mount.push(`        _t.add_rows([${rows.map(r => '(' + r.map(q).join(', ') + ')').join(', ')}])`);
+        break;
+      }
+      case 'progress': {
+        used.add('ProgressBar');
+        const lab = p.showLabel && c.h >= 2;
+        if (lab){
+          add(id + '_l', c.x, c.y, c.w, 1, `color: ${T.fg}; background: transparent;`);
+          compose.push(`        yield Static(${q(String(p.label || '') + (p.showPct ? '  ' + Math.round(p.pct) + '%' : ''))}, id=${q(id + '_l')})`);
+        }
+        add(id, c.x, c.y + (lab ? 1 : 0), c.w, 1, 'background: transparent; padding: 0;');
+        compose.push(`        yield ProgressBar(total=100, show_eta=False, id=${q(id)})`);
+        mount.push(`        self.query_one(${q('#' + id)}, ProgressBar).update(progress=${Math.round(clamp(p.pct, 0, 100))})`);
+        break;
+      }
+      case 'spark': {
+        used.add('Sparkline');
+        const vals = String(p.values).split(',').map(s => parseFloat(s)).filter(v => !isNaN(v));
+        add(id, c.x, c.y, c.w, 1, `color: ${resolveColor(p.fg)}; background: transparent;`);
+        compose.push(`        yield Sparkline(data=[${vals.join(', ')}], id=${q(id)})`);
+        break;
+      }
+      case 'input': {
+        used.add('Input');
+        const lab = p.label && c.h >= 2;
+        if (lab){
+          add(id + '_l', c.x, c.y, c.w, 1, `color: ${T.fg}; background: transparent; opacity: 0.6;`);
+          compose.push(`        yield Static(${q(p.label)}, id=${q(id + '_l')})`);
+        }
+        add(id, c.x, c.y + (lab ? 1 : 0), c.w, 1, 'border: none; padding: 0; background: transparent;');
+        compose.push(`        yield Input(value=${q((p.prompt ? p.prompt + ' ' : '') + String(p.value || ''))}, id=${q(id)})`);
+        break;
+      }
+      case 'button': {
+        used.add('Button');
+        const variant = V2T[p.accent];
+        add(id, c.x, c.y, c.w, 1, 'height: 1; border: none;' + (p.style === 'outline' ? ` background: transparent; color: ${resolveColor(p.accent)};` : ''));
+        compose.push(`        yield Button(${q(String(p.label).toUpperCase())}, id=${q(id)}${variant && p.style !== 'outline' ? `, variant=${q(variant)}` : ''})`);
+        break;
+      }
+      case 'rule': {
+        add(id, c.x, c.y, c.w, 1, `color: ${resolveColor(p.fg)}; background: transparent;`);
+        const line = (p.char || '─').repeat(c.w);
+        compose.push(`        yield Static(${q(line)}, id=${q(id)})`);
+        break;
+      }
+      case 'statusbar': {
+        const w = c.w;
+        let line = String(p.left || '');
+        const ctr = String(p.center || ''), rgt = String(p.right || '');
+        line += ' '.repeat(Math.max(1, Math.floor((w - ctr.length) / 2) - line.length)) + ctr;
+        line += ' '.repeat(Math.max(1, w - line.length - rgt.length)) + rgt;
+        add(id, c.x, c.y, c.w, 1, `background: ${resolveColor(p.bg)}; color: ${resolveColor(p.fg)}; text-style: bold;`);
+        compose.push(`        yield Static(${q(line.slice(0, w))}, id=${q(id)})`);
+        break;
+      }
+    }
+  }
+  const cls = state.name.replace(/[^a-zA-Z0-9]/g, '') || 'TTYStudio';
+  const appCls = cls[0].toUpperCase() + cls.slice(1) + 'App';
+  return `#!/usr/bin/env python3
+# ${state.name} — generated by TTY/STUDIO v0.1
+# Semantic Textual app approximating the screen design (absolute-positioned widgets).
+# Run: pip install textual && python3 ${state.name}-tui.py
+from textual.app import App, ComposeResult
+from textual.widgets import ${[...used].sort().join(', ')}
+
+
+class ${appCls}(App):
+    CSS = """
+${css.join('\n')}
+"""
+
+    def compose(self) -> ComposeResult:
+${compose.join('\n')}
+${mount.length ? `
+    def on_mount(self) -> None:
+${mount.join('\n')}
+` : ''}
+
+if __name__ == "__main__":
+    ${appCls}().run()
+`;
+}
+
+/* ═══════════════════════════ 11. EXPORT — PNG / JSON ═══════════════════════════ */
+function exportPNG(){
+  const scale = 2, fs = 14 * scale;
+  const probe = document.createElement('canvas').getContext('2d');
+  probe.font = `${fs}px ${MONO}`;
+  const cw = probe.measureText('0').width, chh = Math.round(fs * 1.25);
+  const pad = Math.round(fs * 1.4);
+  const cv = document.createElement('canvas');
+  cv.width = Math.ceil(state.cols * cw + pad * 2);
+  cv.height = Math.ceil(state.rows * chh + pad * 2);
+  const g = cv.getContext('2d');
+  const T = th();
+  g.fillStyle = T.bg; g.fillRect(0, 0, cv.width, cv.height);
+  const buf = paintAll();
+  g.textBaseline = 'middle';
+  for (let y = 0; y < buf.length; y++){
+    let x = 0;
+    while (x < buf[y].length){
+      const cl = buf[y][x];
+      const key = cl.fg + '|' + cl.bg + '|' + cl.bold + '|' + cl.dim;
+      let x2 = x;
+      while (x2 < buf[y].length && (buf[y][x2].fg + '|' + buf[y][x2].bg + '|' + buf[y][x2].bold + '|' + buf[y][x2].dim) === key) x2++;
+      if (cl.bg){ g.fillStyle = cl.bg; g.fillRect(pad + x * cw, pad + y * chh, (x2 - x) * cw, chh); }
+      const s = buf[y].slice(x, x2).map(cc => cc.ch).join('');
+      if (s.trim()){
+        g.font = `${cl.bold ? '700 ' : ''}${fs}px ${MONO}`;
+        g.globalAlpha = cl.dim ? 0.55 : 1;
+        g.fillStyle = cl.fg || T.fg;
+        g.fillText(s, pad + x * cw, pad + y * chh + chh / 2 + fs * 0.04);
+        g.globalAlpha = 1;
+      }
+      x = x2;
+    }
+  }
+  const a = document.createElement('a');
+  a.download = state.name + '.png'; a.href = cv.toDataURL('image/png'); a.click();
+  toast('exported ' + a.download);
+}
+function exportJSON(){
+  return JSON.stringify({app: 'tty-studio', version: 1, name: state.name, cols: state.cols, rows: state.rows, theme: state.theme, components: state.components}, null, 2);
+}
+function download(name, content, mime){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type: mime || 'text/plain'}));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('exported ' + name);
+}
+
+/* ═══════════════════════════ 12. WIRING & INIT ═══════════════════════════ */
+function init(){
+  const selTheme = document.getElementById('sel-theme');
+  for (const k in THEMES){ const o = el('option', null, THEMES[k].label); o.value = k; selTheme.appendChild(o); }
+  selTheme.addEventListener('change', () => { state.theme = selTheme.value; pushHistory(); render(); });
+  document.getElementById('sel-size').addEventListener('change', e => {
+    const v = e.target.value;
+    if (v === 'custom'){ document.getElementById('size-pop').classList.remove('hidden'); return; }
+    const [cw2, rh2] = v.split('x').map(Number);
+    state.cols = cw2; state.rows = rh2;
+    for (const c of state.components){ c.x = clamp(c.x, 0, state.cols - c.w); c.y = clamp(c.y, 0, state.rows - c.h); }
+    pushHistory(); render();
+  });
+  document.getElementById('pop-apply').onclick = () => {
+    state.cols = clamp(parseInt(document.getElementById('pop-cols').value) || 80, 20, 240);
+    state.rows = clamp(parseInt(document.getElementById('pop-rows').value) || 24, 8, 80);
+    document.getElementById('size-pop').classList.add('hidden');
+    for (const c of state.components){ c.x = clamp(c.x, 0, Math.max(0, state.cols - c.w)); c.y = clamp(c.y, 0, Math.max(0, state.rows - c.h)); }
+    pushHistory(); render();
+  };
+  document.getElementById('sel-template').addEventListener('change', e => {
+    if (e.target.value){ applyTemplate(e.target.value); e.target.value = ''; }
+  });
+  document.getElementById('btn-zoom-in').onclick = () => { state.fs = clamp(state.fs + 2, 8, 24); render(); };
+  document.getElementById('btn-zoom-out').onclick = () => { state.fs = clamp(state.fs - 2, 8, 24); render(); };
+  document.getElementById('btn-zoom-fit').onclick = fitZoom;
+  document.getElementById('btn-grid').onclick = () => { state.showGrid = !state.showGrid; render(); };
+  document.getElementById('btn-chrome').onclick = () => { state.showChrome = !state.showChrome; render(); };
+  document.getElementById('btn-new').onclick = () => { state.components = []; state.selectedId = null; pushHistory(); render(); };
+  document.getElementById('btn-undo').onclick = undo;
+  document.getElementById('btn-redo').onclick = redo;
+  document.getElementById('exp-ansi').onclick = () => download(state.name + '.ansi', exportANSI());
+  document.getElementById('exp-py').onclick = () => download(state.name + '.py', exportPython(), 'text/x-python');
+  document.getElementById('exp-textual').onclick = () => download(state.name + '-tui.py', exportTextual(), 'text/x-python');
+  document.getElementById('exp-png').onclick = exportPNG;
+  document.getElementById('exp-json').onclick = () => download(state.name + '.json', exportJSON(), 'application/json');
+  document.getElementById('btn-import').onclick = () => document.getElementById('file-input').click();
+  document.getElementById('file-input').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try{
+        const d = JSON.parse(rd.result);
+        if (!Array.isArray(d.components) || !d.cols || !d.rows) throw new Error('bad file');
+        state.cols = d.cols; state.rows = d.rows; state.theme = THEMES[d.theme] ? d.theme : 'ansi-dark';
+        state.components = d.components; state.name = d.name || state.name; state.selectedId = null;
+        uidc = Math.max(1, ...state.components.map(c => parseInt(String(c.id).slice(1)) || 0)) + 1;
+        pushHistory(); render(); toast('imported ' + f.name);
+      }catch(err){ toast('import failed: not a tty-studio file'); }
+    };
+    rd.readAsText(f); e.target.value = '';
+  });
+  document.getElementById('tab-props').onclick = () => switchTab(true);
+  document.getElementById('tab-layers').onclick = () => switchTab(false);
+  function switchTab(props){
+    document.getElementById('tab-props').classList.toggle('on', props);
+    document.getElementById('tab-layers').classList.toggle('on', !props);
+    document.getElementById('props').classList.toggle('hidden', !props);
+    document.getElementById('layers').classList.toggle('hidden', props);
+  }
+  document.getElementById('prewrap').addEventListener('mousemove', e => {
+    const r = document.getElementById('screen').getBoundingClientRect();
+    const cx = Math.floor((e.clientX - r.left) / cellW), cy = Math.floor((e.clientY - r.top) / cellH);
+    document.getElementById('st-pos').textContent =
+      (cx >= 0 && cy >= 0 && cx < state.cols && cy < state.rows) ? `${cx},${cy}` : '—';
+  });
+  document.getElementById('stage').addEventListener('pointerdown', e => {
+    if (e.target.id === 'stage' || e.target.id === 'prewrap' || e.target.id === 'window'){
+      state.selectedId = null; document.body.classList.remove('show-side'); render();
+    }
+  });
+  document.getElementById('btn-side').onclick = () => document.body.classList.toggle('show-side');
+  document.getElementById('btn-side-close').onclick = () => document.body.classList.remove('show-side');
+  document.addEventListener('keydown', e => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    const typing = tag === 'input' || tag === 'textarea' || tag === 'select';
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y'){ e.preventDefault(); redo(); return; }
+    if (e.key === 'Escape'){
+      document.getElementById('size-pop').classList.add('hidden');
+      document.body.classList.remove('show-side');
+      if (state.selectedId){ state.selectedId = null; render(); }
+      return;
+    }
+    if (typing) return;
+    const c = sel(); if (!c) return;
+    if (e.key === 'Delete' || e.key === 'Backspace'){
+      e.preventDefault();
+      state.components = state.components.filter(x => x.id !== c.id);
+      state.selectedId = null; pushHistory(); render();
+    } else if (e.key.startsWith('Arrow')){
+      e.preventDefault();
+      const d = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]}[e.key];
+      c.x = clamp(c.x + d[0], 0, state.cols - c.w);
+      c.y = clamp(c.y + d[1], 0, state.rows - c.h);
+      if (!e.repeat) pushHistory();
+      render();
+    }
+  });
+  window.addEventListener('resize', () => render());
+
+  renderPalette();
+  let restored = false;
+  try{
+    const saved = localStorage.getItem('tty-studio-v1');
+    if (saved){ const d = JSON.parse(saved); if (d && Array.isArray(d.components)){ restore(saved); restored = true; } }
+  }catch(e){}
+  if (!restored){ applyTemplate('monitor'); }
+  render();
+  if (window.innerWidth <= 820) requestAnimationFrame(() => fitZoom());
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => render());
+}
+function fitZoom(){
+  const stg = document.getElementById('stage');
+  const availW = stg.clientWidth - 60, availH = stg.clientHeight - 90;
+  state.fs = 6;
+  for (let fs = 22; fs >= 6; fs -= 1){
+    mctx.font = `${fs}px ${MONO}`;
+    const cw2 = mctx.measureText('0').width, ch2 = Math.round(fs * 1.25);
+    if (state.cols * cw2 <= availW && state.rows * ch2 <= availH){ state.fs = fs; break; }
+  }
+  render();
+}
+window.__TTY = {state, paintAll, render, applyTemplate, exportANSI, exportPython, exportTextual, exportJSON};
+init();
+</script>
+</body>
+</html>
